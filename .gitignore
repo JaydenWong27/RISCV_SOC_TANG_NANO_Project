@@ -1,0 +1,7 @@
+*.pyc
+.pytest_cache/
+
+SoC Firmware Project/SoC Firmware Project.gprj.user
+SoC Firmware Project/sim/__pycache__/
+SoC Firmware Project/sim/sim_build/
+SoC Firmware Project/sim/results.xml
