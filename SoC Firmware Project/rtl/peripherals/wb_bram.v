@@ -13,15 +13,16 @@ module wb_bram (
 
 );
 
-reg [31:0] mem [0:1023];
+reg [31:0] mem [0:8191];
+initial $readmemh("firmware.hex", mem);
 
 always @(posedge clk) begin
     if(wb_stb && wb_cyc && wb_we) begin
-        mem[wb_addr[11:2]] <= wb_dat_m2s;
+        mem[wb_addr[14:2]] <= wb_dat_m2s;
     end
 end
 
-assign wb_dat_s2m = mem[wb_addr[11:2]]; // read
+assign wb_dat_s2m = mem[wb_addr[14:2]]; // read
 assign wb_ack = wb_stb && wb_cyc; // always ack 
 
 

@@ -9,7 +9,8 @@ module wb_timer (
     input wire [3:0] wb_sel,
 
     output wire [31:0] wb_dat_s2m,
-    output wire wb_ack
+    output wire wb_ack,
+    output wire timer_irq
 );
 
 
@@ -60,4 +61,6 @@ module wb_timer (
 
     
     assign wb_ack = wb_stb && wb_cyc;
+
+    assign timer_irq = status[0];
 endmodule

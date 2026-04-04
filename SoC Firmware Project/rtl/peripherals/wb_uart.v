@@ -43,7 +43,7 @@ module wb_uart (
                 uart_tx <= tx_shift[0];
                 tx_shift <= tx_shift >> 1;
                 bit_count <= bit_count + 1;
-                if(bit_count == 10) begin
+                if(bit_count == 9) begin
                     tx_busy <= 0;
                     end
             end

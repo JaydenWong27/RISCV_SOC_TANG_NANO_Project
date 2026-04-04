@@ -24,6 +24,9 @@ wire [31:0] decode_imm;
 wire[3:0] decode_alu_op;
 wire decode_reg_write, decode_mem_read, decode_mem_write;
 wire decode_branch, decode_jump, decode_mem_to_reg;
+wire [2:0] decode_funct3;
+wire decode_lui, decode_auipc;
+
 
 //regfile outputs
 wire[31:0] regfile_rs1_data, regfile_rs2_data;
@@ -54,6 +57,10 @@ reg id_ex_branch;
 reg id_ex_jump;
 reg id_ex_mem_to_reg;
 reg id_ex_use_imm;
+reg [2:0] id_ex_funct3;
+reg id_ex_lui;
+reg id_ex_auipc;
+
 
 // EX/MEM pipeline register
 reg [31:0] ex_mem_alu_result;
@@ -63,6 +70,10 @@ reg ex_mem_reg_write;
 reg ex_mem_mem_read;
 reg ex_mem_mem_write;
 reg ex_mem_mem_to_reg;
+reg ex_mem_jump;
+reg [31:0] ex_mem_pc;
+reg ex_mem_lui;
+reg [31:0] ex_mem_imm;
 
 // MEM/WB pipeline register
 reg [31:0] mem_wb_alu_result;
@@ -70,7 +81,10 @@ reg [31:0] mem_wb_mem_data;
 reg [4:0] mem_wb_rd;
 reg mem_wb_reg_write;
 reg mem_wb_mem_to_reg;
-
+reg mem_wb_jump;
+reg [31:0] mem_wb_pc;
+reg mem_wb_lui;
+reg [31:0] mem_wb_imm;
 
 //writeback signals
 wire[4:0] wb_rd;
@@ -90,14 +104,27 @@ wire hazard_flush;
 //branch target
 wire [31:0] branch_target;
 
-assign hazard_branch_taken = id_ex_branch && alu_zero;
+wire branch_condition;
+assign branch_condition = (id_ex_funct3 == 3'b000) ?  alu_zero :      // BEQ
+                          (id_ex_funct3 == 3'b001) ? !alu_zero :      // BNE
+                          (id_ex_funct3 == 3'b100) ?  alu_result[31]: // BLT
+                          (id_ex_funct3 == 3'b101) ? !alu_result[31]: // BGE
+                          (id_ex_funct3 == 3'b110) ?  alu_result[31]: // BLTU
+                          (id_ex_funct3 == 3'b111) ? !alu_result[31]: // BGEU
+                          1'b0;
+
+assign hazard_branch_taken = id_ex_branch && branch_condition;
+
 
 //ALU inputs
-assign alu_a = id_ex_rs1_data;
+assign alu_a = id_ex_auipc ? id_ex_pc : id_ex_rs1_data;
 assign alu_b = (id_ex_use_imm)? id_ex_imm : id_ex_rs2_data;
 
 // Writeback: mux between ALU result and memory data
-assign wb_rd_data = mem_wb_mem_to_reg ? mem_wb_mem_data : mem_wb_alu_result;
+assign wb_rd_data = mem_wb_lui ? mem_wb_imm :
+                   mem_wb_jump ? mem_wb_pc + 4 :
+                   mem_wb_mem_to_reg ? mem_wb_mem_data :
+                   mem_wb_alu_result;
 assign wb_rd = mem_wb_rd;
 assign wb_reg_write = mem_wb_reg_write;
 
@@ -139,7 +166,10 @@ assign wb_sel = 4'b1111;
     .mem_write(decode_mem_write),
     .branch(decode_branch),
     .jump(decode_jump),
-    .mem_to_reg(decode_mem_to_reg)
+    .mem_to_reg(decode_mem_to_reg),
+    .decode_funct3(decode_funct3),
+    .lui(decode_lui),
+    .auipc(decode_auipc)
 );
 
 rv32i_regfile regfile(
@@ -211,6 +241,9 @@ always @(posedge clk) begin
         id_ex_mem_to_reg <= 0;
         id_ex_pc <= 0;
         id_ex_use_imm <= 0;
+        id_ex_funct3 <= 0;
+        id_ex_lui <= 0;
+        id_ex_auipc <= 0;
     end else if (!hazard_stall) begin
         id_ex_rs1_data <= regfile_rs1_data; //latch register value
         id_ex_rs2_data <= regfile_rs2_data; 
@@ -225,6 +258,9 @@ always @(posedge clk) begin
         id_ex_mem_to_reg <= decode_mem_to_reg;
         id_ex_pc <= if_id_pc;
         id_ex_use_imm <= (if_id_instr[6:0] != 7'b0110011);
+        id_ex_funct3 <= decode_funct3;
+        id_ex_lui <= decode_lui;
+        id_ex_auipc <= decode_auipc;
     end
 end
 //ex/mem block :latches ALU result
@@ -238,6 +274,11 @@ always @(posedge clk) begin
         ex_mem_mem_read <= 0;
         ex_mem_mem_write <= 0;
         ex_mem_mem_to_reg <= 0;
+        ex_mem_jump <= 0;
+        ex_mem_pc <= 0;
+        ex_mem_lui <= 0;
+        ex_mem_imm <= 0;
+
     end else begin
         ex_mem_alu_result <= alu_result;
         ex_mem_rs2_data <= id_ex_rs2_data;
@@ -246,6 +287,10 @@ always @(posedge clk) begin
         ex_mem_mem_read <= id_ex_mem_read;
         ex_mem_mem_write <= id_ex_mem_write;
         ex_mem_mem_to_reg <= id_ex_mem_to_reg;
+        ex_mem_jump <= id_ex_jump;
+        ex_mem_pc <= id_ex_pc;
+        ex_mem_lui <= id_ex_lui;
+        ex_mem_imm <= id_ex_imm;
     end
  end
 
@@ -257,12 +302,20 @@ always @(posedge clk) begin
         mem_wb_rd <= 0;
         mem_wb_reg_write <= 0;
         mem_wb_mem_to_reg <= 0;
+        mem_wb_jump <= 0;
+        mem_wb_pc <= 0;
+        mem_wb_lui <= 0;
+        mem_wb_imm <= 0;
     end else begin
         mem_wb_alu_result <= ex_mem_alu_result; // ALU result passes through
         mem_wb_mem_data <= wb_dat_s2m; //memory data arrives here
         mem_wb_rd <= ex_mem_rd; //still tracking destination
         mem_wb_reg_write <= ex_mem_reg_write;
         mem_wb_mem_to_reg <= ex_mem_mem_to_reg;
+        mem_wb_jump <= ex_mem_jump;
+        mem_wb_pc <= ex_mem_pc;
+        mem_wb_lui <= ex_mem_lui;
+        mem_wb_imm <= ex_mem_imm;
     end
  end
 
