@@ -35,7 +35,6 @@ wire bram_wb_ack;
 
 wire [31:0] uart_wb_addr;
 wire [31:0] uart_wb_dat_m2s;
-wire uart_wb_cyc;
 wire uart_wb_stb;
 wire uart_wb_we;
 wire [3:0] uart_wb_sel;
@@ -44,7 +43,6 @@ wire uart_wb_ack;
 
 wire [31:0] gpio_wb_addr;
 wire [31:0] gpio_wb_dat_m2s;
-wire gpio_wb_cyc;
 wire gpio_wb_stb;
 wire gpio_wb_we;
 wire [3:0] gpio_wb_sel;
@@ -54,7 +52,6 @@ wire gpio_wb_ack;
 
 wire [31:0] pwm_wb_addr;
 wire [31:0] pwm_wb_dat_m2s;
-wire pwm_wb_cyc;
 wire pwm_wb_stb;
 wire pwm_wb_we;
 wire [3:0] pwm_wb_sel;
@@ -63,12 +60,17 @@ wire pwm_wb_ack;
 
 wire [31:0] timer_wb_addr;
 wire [31:0] timer_wb_dat_m2s;
-wire timer_wb_cyc;
 wire timer_wb_stb;
 wire timer_wb_we;
 wire [3:0] timer_wb_sel;
 wire [31:0] timer_wb_dat_s2m;
 wire timer_wb_ack;
+
+assign bram_wb_addr    = cpu_wb_addr;
+assign bram_wb_dat_m2s = cpu_wb_dat_m2s;
+assign bram_wb_cyc     = cpu_wb_cyc;
+assign bram_wb_we      = cpu_wb_we;
+assign bram_wb_sel     = cpu_wb_sel;
 
 wire bram_sel_data = bram_wb_cyc && bram_wb_stb;
 
